@@ -21,18 +21,19 @@ import (
 
 	"sync"
 
-	"github.com/kubeless/kubeless/pkg/utils"
+	"github.com/kubeless/nats-trigger/pkg/utils"
 	"github.com/nats-io/go-nats"
 	"github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
 
 var (
-	mutex     = &sync.Mutex{}
-	stopM     map[string](chan struct{})
-	stoppedM  map[string](chan struct{})
-	consumerM map[string]bool
-	url       string
+	mutex         = &sync.Mutex{}
+	stopM         map[string](chan struct{})
+	stoppedM      map[string](chan struct{})
+	consumerM     map[string]bool
+	url           string
+	clusterDomain string
 )
 
 func init() {
@@ -44,6 +45,10 @@ func init() {
 	url = os.Getenv("NATS_URL")
 	if url == "" {
 		url = "nats://nats.nats-io.svc.cluster.local:4222"
+	}
+	clusterDomain = os.Getenv("CLUSTER_DOMAIN")
+	if clusterDomain == "" {
+		clusterDomain = "cluster.local"
 	}
 }
 
@@ -60,7 +65,7 @@ func createConsumerProcess(topic, funcName, ns, queueGroupID string, clientset k
 	subscription, err := nc.QueueSubscribe(topic, queueGroupID, func(msg *nats.Msg) {
 		logrus.Debugf("Received Message %v on Topic: %v Queue: %v", string(msg.Data), msg.Subject, msg.Sub.Queue)
 		logrus.Infof("Sending message %s to function %s", string(msg.Data), funcName)
-		req, err := utils.GetHTTPReq(clientset, funcName, ns, "natstriggers.kubeless.io", "POST", string(msg.Data))
+		req, err := utils.GetHTTPReq(clientset, funcName, ns, clusterDomain, "natstriggers.kubeless.io", "POST", string(msg.Data))
 		if err != nil {
 			logrus.Errorf("Unable to elaborate request: %v", err)
 		} else {
